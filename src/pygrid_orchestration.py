@@ -142,7 +142,7 @@ def get_info():
     node_url = dataset_response['Items'][0]['nodeURL']
 
     try:
-        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id')
+        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id, version')
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 400
 
@@ -150,7 +150,7 @@ def get_info():
     rmodels = []
 
     for model in models:
-        rmodels.append(model['model_id'])
+        rmodels.append((model['model_id'], model['version']))
 
     return jsonify({'models': rmodels, 'nodeURL': node_url})
 
