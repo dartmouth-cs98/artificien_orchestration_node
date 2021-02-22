@@ -5,9 +5,25 @@ from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
 from .orchestration_helper import AppFactory
 from .cfn_helper import get_outputs
+from flask_cognito import CognitoAuth, cognito_auth_required
+import secrets
+
+
 
 app = Flask(__name__)
+app.config.update({
+    'COGNITO_REGION': 'us-east-1',
+    'COGNITO_USERPOOL_ID': 'us-east-1_gxjsNZ82v',
+
+    # optional
+    'COGNITO_APP_CLIENT_ID': '5nrhkbejfsq8mgi5jc08586maa',  # client ID you wish to verify user is authenticated against
+    'COGNITO_CHECK_TOKEN_EXPIRATION': False,  # disable token expiration checking for testing purposes
+    'COGNITO_JWT_HEADER_NAME': 'Authorization',
+    'COGNITO_JWT_HEADER_PREFIX': 'Bearer',
+})
 region_name = "us-east-1"
+length = 16
+cogauth = CognitoAuth(app)
 
 try:
     ecs_client = boto3.client('ecs')
@@ -26,6 +42,7 @@ def status():
 
 # spin up a new node for an app developer
 @app.route("/create", methods=["POST"])
+@cognito_auth_required
 def create_node():
     # grab model id, query model_table to check if a node has already been spun up for model
     model_table = dynamodb.Table('model_table')
@@ -88,6 +105,7 @@ def create_node():
 
 # delete node of an app developer
 @app.route("/delete", methods=["POST"])
+@cognito_auth_required
 def delete_node():
     return None
 
@@ -153,6 +171,25 @@ def get_info():
         rmodels.append((model['model_id'], model['version']))
 
     return jsonify({'models': rmodels, 'nodeURL': node_url})
+
+@app.route("/generate_key", methods=["POST"])
+@cognito_auth_required
+def generate_key():
+    user_id = request.json.get('user_id')
+    api_key = secrets.token_urlsafe(length)
+    user_table = dynamodb.Table('user_table')
+    try:
+        user_response = user_table.query(KeyConditionExpression=Key('user_id').eq(user_id))
+    except:
+        return jsonify({'error': 'failed to query dynamodb'}), 500
+
+    if user_response['Items'][0] is None:
+        return jsonify({'error': 'user not found'}), 400
+
+    user_response['Items'][0]['api_key'] = api_key
+    user_table.put_item(Item=user_response['Items'][0])
+
+    return jsonify({'api_key': api_key})
 
 
 def validate_user(model_id, owner):
