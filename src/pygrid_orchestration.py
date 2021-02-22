@@ -187,7 +187,7 @@ def generate_key():
         return jsonify({'error': 'user not found'}), 400
 
     user_response['Items'][0]['api_key'] = api_key
-    user_table.put_item(Item=user_response)
+    user_table.put_item(Item=user_response['Items'][0])
 
     return jsonify({'api_key': api_key})
 
