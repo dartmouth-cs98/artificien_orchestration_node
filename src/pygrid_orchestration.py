@@ -3,10 +3,8 @@ import requests
 import torch as th
 from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
-#from .orchestration_helper import AppFactory
-#from .cfn_helper import get_outputs
-from orchestration_helper import AppFactory
-from cfn_helper import get_outputs
+from .orchestration_helper import AppFactory
+from .cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
 import secrets
 

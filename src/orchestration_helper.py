@@ -1,8 +1,8 @@
 import os
 import boto3
 from aws_cdk import core
-from pygrid_node_stack import PygridNodeStack
-from ecs_cluster_stack import EcsClusterStack
+from .pygrid_node_stack import PygridNodeStack
+from .ecs_cluster_stack import EcsClusterStack
 
 client = boto3.client('cloudformation')
 env = core.Environment(account="719471536408", region="us-east-1")
