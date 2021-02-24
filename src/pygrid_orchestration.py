@@ -5,9 +5,24 @@ from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
 from .orchestration_helper import AppFactory
 from .cfn_helper import get_outputs
+from flask_cognito import CognitoAuth, cognito_auth_required
+import secrets
+
 
 app = Flask(__name__)
+app.config.update({
+    'COGNITO_REGION': 'us-east-1',
+    'COGNITO_USERPOOL_ID': 'us-east-1_gxjsNZ82v',
+
+    # optional
+    'COGNITO_APP_CLIENT_ID': '5nrhkbejfsq8mgi5jc08586maa',  # client ID you wish to verify user is authenticated against
+    'COGNITO_CHECK_TOKEN_EXPIRATION': False,  # disable token expiration checking for testing purposes
+    'COGNITO_JWT_HEADER_NAME': 'Authorization',
+    'COGNITO_JWT_HEADER_PREFIX': 'Bearer',
+})
 region_name = "us-east-1"
+length = 16
+cogauth = CognitoAuth(app)
 
 try:
     ecs_client = boto3.client('ecs')
@@ -26,6 +41,7 @@ def status():
 
 # spin up a new node for an app developer
 @app.route("/create", methods=["POST"])
+@cognito_auth_required
 def create_node():
     # grab model id, query model_table to check if a node has already been spun up for model
     model_table = dynamodb.Table('model_table')
@@ -56,7 +72,7 @@ def create_node():
     if dataset_response['Items'][0]['hasNode'] is True:
         output_dict = get_outputs(stack_name=dataset_id)
         if output_dict is None:
-            return jsonify({'status': 'node is deploying, please try later'})
+            return jsonify({'status': 'node is deploying, please wait'})
         nodeURL = output_dict['PyGridNodeLoadBalancerDNS']
 
         # put nodeAddress into DBd
@@ -88,6 +104,7 @@ def create_node():
 
 # delete node of an app developer
 @app.route("/delete", methods=["POST"])
+@cognito_auth_required
 def delete_node():
     return None
 
@@ -142,26 +159,83 @@ def get_info():
     node_url = dataset_response['Items'][0]['nodeURL']
 
     try:
-        model_response = model_table.query(KeyConditionExpression=Key('dataset').eq(dataset_id))
+        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id, version')
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 400
 
     models = model_response['Items']
-    return jsonify({'models': models, 'nodeURL': node_url})
+    rmodels = []
 
+    for model in models:
+        rmodels.append((model['model_id'], model['version']))
 
-def validate_user(model_id, owner):
+    return jsonify({'models': rmodels, 'nodeURL': node_url})
+
+@app.route("/generate_key", methods=["POST"])
+@cognito_auth_required
+def generate_key():
+    user_id = request.json.get('user_id')
+    api_key = secrets.token_urlsafe(length)
     user_table = dynamodb.Table('user_table')
     try:
-        user_response = user_table.query(KeyConditionExpression=Key('user_id').eq(owner))
+        user_response = user_table.query(KeyConditionExpression=Key('user_id').eq(user_id))
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 500
 
     if user_response['Items'][0] is None:
         return jsonify({'error': 'user not found'}), 400
-    training_set = request.json.get('training_set')
-    purchases = user_response['Items'][0]['datasets_purchased']
-    if model_id in purchases:
+
+    user_response['Items'][0]['api_key'] = api_key
+    user_table.put_item(Item=user_response['Items'][0])
+
+    return jsonify({'api_key': api_key})
+
+@app.route("/get_datasets", methods=["POST"])
+@cognito_auth_required
+def get_my_datasets():
+    user_id = request.json.get('user_id')
+    resp = get_datasets(user_id)
+    if resp == -1:
+        return jsonify({'datasets': 'no purchased datasets available'})
+    else:
+        return jsonify({'datasets': resp})
+
+
+def get_datasets(user_id):
+    dynamodb = boto3.client('dynamodb')
+
+    response = dynamodb.query(
+        TableName='user_table',
+        IndexName='users_username_index',
+        ExpressionAttributeValues={
+            ':v1': {
+                'S': user_id,
+            }
+        },
+        KeyConditionExpression='username = :v1',
+    )
+
+    response = dynamodb.get_item(
+        TableName='user_table',
+        Key={
+            'user_id': {'S': user_id}
+        },
+        AttributesToGet=[
+            'datasets_purchased',
+        ],
+    )
+    datasets = []
+    try:
+        for dataset in response['Item']['datasets_purchased']['L']:
+            datasets.append(dataset['S'])
+        return datasets
+    except:
+        return -1
+
+
+def validate_user(model_id, user_id):
+    datasets = get_datasets(user_id)
+    if model_id in datasets:
         return True
     return False
 
