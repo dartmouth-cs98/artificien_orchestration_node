@@ -258,10 +258,13 @@ def retrieve(user, model_id, version, node_url):
     region = region_name
     s3_bucket_name = "artificien-retrieved-models-storage"
     file_name = user + model_id + version + '/tmp/model.pkl'
-    s3.upload_file('/tmp/model.pkl', s3_bucket_name, file_name)
+    
+    s3.upload_file('/tmp/model.pkl', s3_bucket_name, file_name, ExtraArgs={'ACL':'public-read'})
     print('done!')
+    # https://artificien-retrieved-models-storage.s3.amazonaws.com/technigalaperceptron1.2/tmp/model.pkl
+    bucket_url = 'https://' + s3_bucket_name + '.s3.amazonaws.com/' + model_id + '/tmp/model.pkl'
 
-    bucket_url = 'https://s3.console.aws.amazon.com/s3/object/' + s3_bucket_name + '?region=' + region + '&prefix=' + file_name
+#     bucket_url = 'https://s3.console.aws.amazon.com/s3/object/' + s3_bucket_name + '?region=' + region + '&prefix=' + file_name
 
     # 3. flip is_active boolean on model in dynamo
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
