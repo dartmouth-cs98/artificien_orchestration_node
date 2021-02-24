@@ -19,6 +19,8 @@ class AppFactory:
     def make_standard_stack(self, stack_name):
 
         ecs_cluster_stack = EcsClusterStack(self.app, 'ecsCluster', env=env)
+
+        # New PyGrid stack
         PygridNodeStack(
             self.app,
             stack_name,
