@@ -48,14 +48,15 @@ def create_node():
     dataset_table = dynamodb.Table('dataset_table')
     model_id = request.json.get('model_id')
     dataset_id = request.json.get('dataset_id')
+    features = request.json.get('features')
+    labels = request.json.get('labels')
+
     model_id = model_id.lower()
-    print(model_id)
-    print(dataset_id)
+
     try:
         model_response = model_table.query(KeyConditionExpression=Key('model_id').eq(model_id))
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 500
-    print(model_response)
 
     if model_response['Items'] is None:
         return jsonify({'error': 'model id not found'}), 400
@@ -64,12 +65,22 @@ def create_node():
         dataset_response = dataset_table.query(KeyConditionExpression=Key('dataset_id').eq(dataset_id))
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 500
-    print(dataset_response)
 
     if dataset_response['Items'] is None:
         return jsonify({'error': 'dataset_id not found'}), 400
 
-    # if model hasNode, check if node is fully deployed
+    # first validate the user has access to data requested
+    owner = model_response['Items'][0]['owner_name']
+    if validate_user(dataset_id, owner) is False:
+         return jsonify({'error': 'user has not purchased requested dataset'}), 600
+
+
+    # next, record model features and labels in the database
+    model_response['Items'][0]['features'] = features
+    model_response['Items'][0]['labels'] = labels
+    model_table.put_item(Item=model_response['Items'][0])
+
+    # if dataset hasNode, check if node is fully deployed
     if dataset_response['Items'][0]['hasNode'] is True:
         output_dict = get_outputs(stack_name=dataset_id)
         if output_dict is None:
@@ -85,12 +96,7 @@ def create_node():
         print(nodeURL)
         return jsonify({'status': 'ready', 'nodeURL': nodeURL})
 
-    # if node hasn't been loaded yet, first validate the user has access to data
-    owner = model_response['Items'][0]['owner_name']
-    if validate_user(model_id, owner) is False:
-         return jsonify({'error': 'user has not purchased requested dataset'}), 600
-
-    # deploy resources
+    # if dataset doesn't have node, deploy resources
     app_factory = AppFactory()
     app_factory.make_standard_stack(dataset_id)
     app_factory.generate_stack()
@@ -100,6 +106,7 @@ def create_node():
     # set hasNode to true
     dataset_response['Items'][0]['hasNode'] = True
     dataset_table.put_item(Item=dataset_response['Items'][0])
+
     return jsonify({'status': 'node is starting to deploy. This may take a few minutes'})
 
 
@@ -149,8 +156,8 @@ def get_info():
     #validate api key
     api_key = request.headers.get('api_key')
     dataset_id = request.json.get('dataset_id')
-
-    if not validate_api_key(api_key, dataset_id):
+    resp = validate_api_key(api_key, dataset_id)
+    if resp is not True:
         return jsonify({'error': 'cannot authenticate, verify provided api_key'}), 400
 
     dataset_table = dynamodb.Table('dataset_table')
@@ -166,15 +173,16 @@ def get_info():
     node_url = dataset_response['Items'][0]['nodeURL']
 
     try:
-        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id, version')
+        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id, version, features, labels')
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 400
 
     models = model_response['Items']
+    print(models)
     rmodels = []
 
     for model in models:
-        rmodels.append((model['model_id'], model['version']))
+        rmodels.append((model['model_id'], model['version'], model['features'], model['labels']))
 
     return jsonify({'models': rmodels, 'nodeURL': node_url})
 
@@ -185,6 +193,7 @@ def generate_key():
     user_id = request.json.get('user_id')
     api_key = secrets.token_urlsafe(length)
     user_table = dynamodb.Table('user_table')
+
     try:
         user_response = user_table.query(KeyConditionExpression=Key('user_id').eq(user_id))
     except:
@@ -225,9 +234,9 @@ def get_datasets(user_id):
         return -1
 
 
-def validate_user(model_id, user_id):
+def validate_user(dataset_id, user_id):
     datasets = get_datasets(user_id)
-    if model_id in datasets:
+    if dataset_id in datasets:
         return True
     return False
 
@@ -235,15 +244,16 @@ def validate_user(model_id, user_id):
 def validate_api_key(api_key, dataset_id):
     dataset_table = dynamodb.Table('dataset_table')
     user_table = dynamodb.Table('user_table')
+    api_key_db = 0
     try:
         dataset_response = dataset_table.query(KeyConditionExpression=Key('dataset_id').eq(dataset_id))
     except:
-        return jsonify({'error': 'failed to query dynamodb'}), 400
+        return jsonify({'error': 'failed to query dynamodb'})
 
     try:
         owner_username = dataset_response['Items'][0]['owner_username']
     except:
-        return jsonify({'error': 'owner not listed for provided dataset_id'}), 400
+        return jsonify({'error': 'owner not listed for provided dataset_id'})
 
     try:
         user_response = user_table.query(
@@ -251,12 +261,12 @@ def validate_api_key(api_key, dataset_id):
             KeyConditionExpression=Key('username').eq(owner_username)
         )
     except:
-        return jsonify({'error': 'failed to query dynamodb'}), 400
+        return jsonify({'error': 'failed to query dynamodb'})
 
     try:
         api_key_db = user_response['Items'][0]['api_key']
     except:
-        return jsonify({'error': 'no api_key generated for user'}), 400
+        return jsonify({'error': 'no api_key generated for user'})
 
     if api_key_db == api_key:
         return True
