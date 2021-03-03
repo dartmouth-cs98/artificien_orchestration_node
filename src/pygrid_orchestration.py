@@ -216,7 +216,7 @@ def get_my_datasets():
     if resp == -1:
         return jsonify({'datasets': 'no purchased datasets available'})
     else:
-        return jsonify({'datasets': resp})
+        return jsonify({'datasets': list(resp)})
 
 
 def get_datasets(user_id):
