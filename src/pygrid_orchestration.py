@@ -6,10 +6,13 @@ from flask import Flask, jsonify, request
 from .orchestration_helper import AppFactory
 from .cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
+from flask_cors import CORS
 import secrets
 
 
 app = Flask(__name__)
+
+# Add Cognito Auth
 app.config.update({
     'COGNITO_REGION': 'us-east-1',
     'COGNITO_USERPOOL_ID': 'us-east-1_gxjsNZ82v',
@@ -23,6 +26,9 @@ app.config.update({
 region_name = "us-east-1"
 length = 16
 cogauth = CognitoAuth(app)
+
+# Add CORS compatibility
+CORS(app)
 
 try:
     ecs_client = boto3.client('ecs')
