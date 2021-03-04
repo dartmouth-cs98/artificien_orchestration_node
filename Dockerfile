@@ -20,7 +20,7 @@ RUN npm install -g aws-cdk
 
 # Copy code in and run it
 COPY entrypoint.sh requirements.txt /app/
-COPY /src /app/src
 WORKDIR /app/
 RUN pip3 install -r requirements.txt
+COPY /src /app/src
 ENTRYPOINT ["sh", "entrypoint.sh"]
