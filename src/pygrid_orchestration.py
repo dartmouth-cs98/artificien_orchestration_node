@@ -1,3 +1,4 @@
+import os
 import boto3
 import requests
 import torch as th
@@ -72,22 +73,27 @@ def create_node():
     # first validate the user has access to data requested
     owner = model_response['Items'][0]['owner_name']
     if validate_user(dataset_id, owner) is False:
-         return jsonify({'error': 'user has not purchased requested dataset'}), 600
-
+        return jsonify({'error': 'user has not purchased requested dataset'}), 600
 
     # next, record model features and labels in the database
     model_response['Items'][0]['features'] = features
     model_response['Items'][0]['labels'] = labels
     model_table.put_item(Item=model_response['Items'][0])
-
+    
     # if dataset hasNode, check if node is fully deployed
     if dataset_response['Items'][0]['hasNode'] is True:
         output_dict = get_outputs(stack_name=dataset_id)
-        if output_dict is None:
-            return jsonify({'status': 'node is deploying, please wait'})
-        nodeURL = output_dict['PyGridNodeLoadBalancerDNS']
 
-        # put nodeAddress into DBd
+        # If we are on a 'LOCALTEST', then the pygrid node won't get picked up by cloudformation
+        # (since pygrid is simply running on local)
+        if os.environ['LOCALTEST'] == 'True':
+            nodeURL = dataset_response['Items'][0]['nodeURL']
+        else:
+            if output_dict is None:
+                return jsonify({'status': 'node is deploying, please wait'})
+            nodeURL = output_dict['PyGridNodeLoadBalancerDNS']
+
+        # put nodeAddress into DB
         model_response['Items'][0]['node_URL'] = nodeURL
         model_table.put_item(Item=model_response['Items'][0])
 
@@ -131,10 +137,11 @@ def model_progress():
 
     # Update the DynamoDB entry for 'percent_complete'
     try:
-        model = model_table.query(KeyConditionExpression=Key('model_id').eq(model_id))['Items'][0]
+        model_response = model_table.query(KeyConditionExpression=Key('model_id').eq(model_id))
+        model = model_response['Items'][0]
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 500
-
+    
     model['percent_complete'] = percent_complete
     model_table.put_item(Item=model)
 
@@ -148,7 +155,7 @@ def model_progress():
 
         # If all models left in the node are done, spin it down
 
-    return jsonify({'status': 'model completion was updated successfully'})
+    return jsonify({'status': 'model progress was updated successfully'})
 
 
 @app.route("/info", methods=["POST"])
@@ -283,29 +290,29 @@ def retrieve(user, model_id, version, node_url):
         "checkpoint": "latest"
     }
 
-    url = node_url + "/model-centric/retrieve-model"
+    url = 'http://' + node_url + ":5000/model-centric/retrieve-model"
     r = requests.get(url, params=payload)
-    th.save(r.content, '/tmp/model.pkl')  # only the /tmp directory in lambda is writable
+    
+    # perceptron-1.2.pkl
+    file_name = model_id + '-' + version + '.pkl'  # name of file
+    file_loc = '/tmp/' + file_name  # local save location
+    s3_loc = user + '/' + file_name  # location where file will be saved on S3 (under a user's directory)
+    th.save(r.content, file_loc)
 
     # 2. Put model in s3 bucket
     s3 = boto3.client('s3')
-    region = region_name
     s3_bucket_name = "artificien-retrieved-models-storage"
-    file_name = user + model_id + version + '/tmp/model.pkl'
+    s3.upload_file(file_loc, s3_bucket_name, s3_loc, ExtraArgs={'ACL': 'public-read'})  # Public download
+    print('Done uploading trained model to S3!')
+
+    # https://artificien-retrieved-models-storage.s3.amazonaws.com/technigala/perceptron1.2.pkl
+    bucket_url = 'https://' + s3_bucket_name + '.s3.amazonaws.com/' + s3_loc
     
-    s3.upload_file('/tmp/model.pkl', s3_bucket_name, file_name, ExtraArgs={'ACL':'public-read'})
-    print('done!')
-    # https://artificien-retrieved-models-storage.s3.amazonaws.com/technigalaperceptron1.2/tmp/model.pkl
-    bucket_url = 'https://' + s3_bucket_name + '.s3.amazonaws.com/' + model_id + '/tmp/model.pkl'
-
-#     bucket_url = 'https://s3.console.aws.amazon.com/s3/object/' + s3_bucket_name + '?region=' + region + '&prefix=' + file_name
-
     # 3. flip is_active boolean on model in dynamo
-    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-    table = dynamodb.Table('model_table')
+    model_table = dynamodb.Table('model_table')
 
     # 4. Add bucket URL to model in Dynamo
-    update_response = table.update_item(
+    update_response = model_table.update_item(
         Key={'model_id': model_id},
         UpdateExpression="set download_link = :r",
         ExpressionAttributeValues={
