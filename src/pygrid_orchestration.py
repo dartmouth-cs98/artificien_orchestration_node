@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 from .orchestration_helper import AppFactory
 from .cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
+from flask_cors import CORS, cross_origin
 import secrets
 
 
@@ -23,7 +24,10 @@ app.config.update({
 })
 region_name = "us-east-1"
 length = 16
+cors = CORS(app, origins='*', allow_headers='Content-Type, Authorization',
+            methods=['GET', 'HEAD', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'])
 cogauth = CognitoAuth(app)
+
 
 try:
     ecs_client = boto3.client('ecs')
@@ -206,7 +210,7 @@ def generate_key():
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 500
 
-    if user_response['Items'][0] is None:
+    if user_response['Items'] is None:
         return jsonify({'error': 'user not found'}), 400
 
     user_response['Items'][0]['api_key'] = api_key
