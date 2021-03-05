@@ -86,7 +86,7 @@ def create_node():
 
         # If we are on a 'LOCALTEST', then the pygrid node won't get picked up by cloudformation
         # (since pygrid is simply running on local)
-        if os.environ['LOCALTEST'] == 'True':
+        if os.getenv('LOCALTEST') == 'True':
             nodeURL = dataset_response['Items'][0]['nodeURL']
         else:
             if output_dict is None:
