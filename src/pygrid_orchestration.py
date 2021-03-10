@@ -7,7 +7,7 @@ from flask import Flask, jsonify, request
 from .orchestration_helper import AppFactory
 from .cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
-from flask_cors import CORS, cross_origin
+# from flask_cors import CORS, cross_origin
 import secrets
 
 
@@ -24,8 +24,8 @@ app.config.update({
 })
 region_name = "us-east-1"
 length = 16
-cors = CORS(app, origins='*', allow_headers='Content-Type, Authorization',
-            methods=['GET', 'HEAD', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'])
+# cors = CORS(app, origins='*', send_wildcard=True, allow_headers='Content-Type, Authorization',
+#             methods=['GET', 'HEAD', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'])
 cogauth = CognitoAuth(app)
 
 
@@ -283,6 +283,14 @@ def validate_api_key(api_key, dataset_id):
         return True
     else:
         return False
+
+
+@app.after_request
+def apply_caching(response):
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    return response
 
 
 def retrieve(user, model_id, version, node_url):
