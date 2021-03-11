@@ -2,12 +2,12 @@ import os
 import boto3
 import requests
 import torch as th
+from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
 from .orchestration_helper import AppFactory
 from .cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
-# from flask_cors import CORS, cross_origin
 import secrets
 
 
@@ -24,8 +24,6 @@ app.config.update({
 })
 region_name = "us-east-1"
 length = 16
-# cors = CORS(app, origins='*', send_wildcard=True, allow_headers='Content-Type, Authorization',
-#             methods=['GET', 'HEAD', 'POST', 'OPTIONS', 'PUT', 'PATCH', 'DELETE'])
 cogauth = CognitoAuth(app)
 
 
@@ -126,6 +124,42 @@ def create_node():
 def delete_node():
     return None
 
+@app.route("/model_loss", methods=["POST"])
+def model_loss():
+    """
+    Receives reports of model loss and updates the DB accordingly.
+    Model loss is updated on a cycle-by-cycle basis. So... each time a cycle
+    completes, the loss is reset.
+    """
+    acc = float(request.json.get('acc'))
+    loss = float(request.json.get('loss'))
+    model_id = request.json.get('model_id')
+    model_table = dynamodb.Table('model_table')
+
+    # Debugging
+    print('Model', model_id, 'had a loss of', loss)
+
+    # Update the DynamoDB entry for 'percent_complete'
+    try:
+        model_response = model_table.query(KeyConditionExpression=Key('model_id').eq(model_id))
+        model = model_response['Items'][0]
+    except:
+        return jsonify({'error': 'failed to query dynamodb'}), 500
+
+    # Determine the new average model loss across the cycle
+    loss_sum = float(model['devices_trained_this_cycle'] * model['loss_this_cycle'])
+    acc_sum = float(model['devices_trained_this_cycle'] * model['acc_this_cycle'])
+    new_loss = (loss_sum + loss) / float(model['devices_trained_this_cycle'] + 1)
+    new_acc = (acc_sum + acc) / float(model['devices_trained_this_cycle'] + 1)
+
+    # Update the model loss
+    model['devices_trained_this_cycle'] += 1
+    model['loss_this_cycle'] = Decimal(new_loss)
+    model['acc_this_cycle'] = Decimal(new_acc)
+    model_table.put_item(Item=model)
+
+    return jsonify({'status': 'model loss/acc was updated successfully'})
+
 
 @app.route("/model_progress", methods=["POST"])
 def model_progress():
@@ -145,8 +179,13 @@ def model_progress():
         model = model_response['Items'][0]
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 500
-    
-    model['percent_complete'] = percent_complete
+
+    # Set the new completion percentage
+    model['percent_complete'] = Decimal(percent_complete)
+
+    # Now that the cycle is complete, reset num_devices trained
+    model['devices_trained_this_cycle'] = 0
+
     model_table.put_item(Item=model)
 
     # If the model is done training, retrieve it so that the user can download it
