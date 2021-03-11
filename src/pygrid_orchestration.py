@@ -139,7 +139,7 @@ def model_loss():
     # Debugging
     print('Model', model_id, 'had a loss of', loss)
 
-    # Update the DynamoDB entry for 'percent_complete'
+    # Update the DynamoDB entry for the model
     try:
         model_response = model_table.query(KeyConditionExpression=Key('model_id').eq(model_id))
         model = model_response['Items'][0]
