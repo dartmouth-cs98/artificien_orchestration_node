@@ -5,8 +5,8 @@ import torch as th
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
-from orchestration_helper import AppFactory
-from cfn_helper import get_outputs
+from .orchestration_helper import AppFactory
+from .cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
 import secrets
 
@@ -382,6 +382,3 @@ def retrieve(user, model_id, version, node_url):
 
     if update_response:
         print("UPDATE success")
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
