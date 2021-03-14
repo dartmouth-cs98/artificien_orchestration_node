@@ -217,6 +217,12 @@ def get_info():
         dataset_response = dataset_table.query(KeyConditionExpression=Key('dataset_id').eq(dataset_id))
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 400
+
+    if not dataset_response['Items'][0]['properlySetUp']:
+        dataset_response['Items'][0]['properlySetUp'] = True
+        dataset_table.put_item(Item=dataset_response['Items'][0])
+        return jsonify({'success': dataset_id+' is properly configured'})
+
     if not dataset_response['Items'][0]['hasNode']:
         return jsonify({'error': 'no node available'}), 400
 
@@ -228,10 +234,11 @@ def get_info():
         return jsonify({'error': 'failed to query dynamodb'}), 400
 
     models = model_response['Items']
-    print(models)
     rmodels = []
 
     for model in models:
+        print(model['model_id'])
+        print(model['features'])
         rmodels.append((model['model_id'], model['version'], model['features'], model['labels']))
 
     return jsonify({'models': rmodels, 'nodeURL': node_url})
