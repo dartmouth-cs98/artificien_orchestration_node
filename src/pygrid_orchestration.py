@@ -5,8 +5,8 @@ import torch as th
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from flask import Flask, jsonify, request
-from .orchestration_helper import AppFactory
-from .cfn_helper import get_outputs
+from orchestration_helper import AppFactory
+from cfn_helper import get_outputs
 from flask_cognito import CognitoAuth, cognito_auth_required
 import secrets
 
@@ -229,7 +229,7 @@ def get_info():
     node_url = dataset_response['Items'][0]['nodeURL']
 
     try:
-        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id, version, features, labels')
+        model_response = model_table.scan(FilterExpression=Key('dataset').eq(dataset_id), ProjectionExpression='model_id, version, features, labels, percent_complete')
     except:
         return jsonify({'error': 'failed to query dynamodb'}), 400
 
@@ -237,9 +237,11 @@ def get_info():
     rmodels = []
 
     for model in models:
-        print(model['model_id'])
-        print(model['features'])
-        rmodels.append((model['model_id'], model['version'], model['features'], model['labels']))
+        try:
+            if model['percent_complete'] != 100:
+                rmodels.append((model['model_id'], model['version'], model['features'], model['labels']))
+        except:
+            rmodels.append((model['model_id'], model['version'], model['features'], model['labels']))
 
     return jsonify({'models': rmodels, 'nodeURL': node_url})
 
@@ -380,3 +382,6 @@ def retrieve(user, model_id, version, node_url):
 
     if update_response:
         print("UPDATE success")
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001)
