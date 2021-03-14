@@ -335,7 +335,7 @@ def validate_api_key(api_key, dataset_id):
 
 @app.after_request
 def apply_caching(response):
-    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = 'POST, PUT, GET, HEAD, OPTIONS'
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "*"
     return response
