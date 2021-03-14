@@ -33,7 +33,7 @@ class PygridNodeStack(cdk.Stack):
             task_image_options=ecs_patterns.NetworkLoadBalancedTaskImageOptions(
                 container_name='pygrid_node',
                 container_port=5000,
-                image=ecs.ContainerImage.from_registry('mkenney1/artificien_pygrid:reveng_all'),
+                image=ecs.ContainerImage.from_registry('mkenney1/artificien_pygrid:latest'),
                 environment={
                     'NODE_ID': id.lower(),  # Use stack ID as node ID
                     'ADDRESS': 'http://localhost:5000',
