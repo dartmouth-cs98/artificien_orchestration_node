@@ -295,7 +295,9 @@ def get_datasets(user_id):
 
 def validate_user(dataset_id, user_id):
     datasets = get_datasets(user_id)
-    if dataset_id in datasets:
+    if datasets == -1:
+        return False
+    elif dataset_id in datasets:
         return True
     return False
 
