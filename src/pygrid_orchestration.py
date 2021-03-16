@@ -224,7 +224,7 @@ def get_info():
         return jsonify({'success': dataset_id+' is properly configured'})
 
     if not dataset_response['Items'][0]['hasNode']:
-        return jsonify({'error': 'no node available'}), 400
+        return jsonify({'wait': 'no node available yet'})
 
     node_url = dataset_response['Items'][0]['nodeURL']
 
