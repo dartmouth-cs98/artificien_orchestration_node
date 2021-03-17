@@ -11,7 +11,7 @@ The core pieces are in the `src` folder. <br />
 `pygrid_node_stack.py` is an AWS CDK class for the pygrid node. This is essentially an object of the pygrid stack and its attributes that can be used to deploy new pygrid nodes. <br />
 `pygrid_orchestration.py` is the master node service. It's a flask based rest service that uses all of the above objects and helper functions to orchestrate artificien's federated learning marketplace.
 
-Upon fresh commit, a github action checks if there were any changes to the stack. If there were, it compiles and updates the dockerfile in the main repo automatically. And loads the new pygric orchestration node.
+Upon fresh commit, a github action checks if there were any changes to the stack. If there were, it compiles and updates the dockerfile in the main repo automatically and loads the new pygrid orchestration node to the cloud.
 
 
 ## Execution
