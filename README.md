@@ -18,10 +18,13 @@ Upon fresh commit, a github action checks if there were any changes to the stack
 
 This is a service built ontop of the Artificien AWS CDK stack, and really isn't meant to be run outside of Artificien machines with proper AWS credentials. However if someone was inclined, they could run the the pygrid orchestration node locally by adding a main method at the bottom with `app.run(...)` (just the normal flask run command) and calling `python pygrid_orchestration.py`. As they'll lack the credentials to spin up cloud resources and permissions to make most of the calls, there's not much they could do here. This isn't meant to be used by anybody - it's supposed to be a backend secure service only usable by artificien.
 
+## Deployment
+This service is deployed via our [artificien infrastructure](https://github.com/dartmouth-cs98/artificien_infrastructure) repository as an Elastic Container Service. Whenever this repo is updated, we've configured a Github Action to build the code, create a Docker Image which can run the code, and push that docker image to our [DockerHub repository](https://hub.docker.com/repository/docker/mkenney1/artificien_orchestration). The latest version of this image is then pulled by our ECS service and the service is automatically updated as we add new changes to this repo.
+
 ## Authors
 
-- Matthew Kenney '21
-- Jake Epstein '21
+- Jake Epstein '21 - who build the majority of this code base.
+- Matthew Kenney '21 - who figured out how to deploy the service, and has added some endpoints and functionality after Jake's up-front work.
 
 ## Acknowledgements
 
